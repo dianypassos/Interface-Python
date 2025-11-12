@@ -3,25 +3,46 @@ from tkinter import filedialog, messagebox
 import requests
 import PyPDF2
 import re
+from datetime import datetime
+
+cache_feriados = {}
 
 def ler_datas_pdf(caminho_pdf):
     leitor = PyPDF2.PdfReader(caminho_pdf)
     texto = ""
     for pagina in leitor.pages:
-        texto += pagina.extract_text()
+        texto += pagina.extract_text() or ""
+    texto = re.sub(r"\s+", " ", texto)
 
-    padrao_data = r"\b\d{2}[/-]\d{2}[/-]\d{4}\b"
+    padrao_data = r"\b(?:\d{2}|\d{4})[./-](?:\d{2})[./-](?:\d{4}|\d{2})\b"
     datas_encontradas = re.findall(padrao_data, texto)
     return list(set(datas_encontradas))
 
+def padronizar_data(data_str):
+    """Converte para yyyy-mm-dd e valida se a data é real."""
+    formatos_possiveis = ["%d/%m/%Y", "%d-%m-%Y", "%d.%m.%Y", "%Y/%m/%d", "%Y-%m-%d"]
+    for fmt in formatos_possiveis:
+        try:
+            data_obj = datetime.strptime(data_str, fmt)
+            return data_obj.strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+    return None
+
 def obter_feriados(ano):
+    if ano in cache_feriados:
+        return cache_feriados[ano]
+
     url = f"https://date.nager.at/api/v3/PublicHolidays/{ano}/BR"
     resposta = requests.get(url)
     if resposta.status_code == 200:
-        return [f["date"] for f in resposta.json()]
+        dados = resposta.json()
+        feriados = {f["date"]: f["localName"] for f in dados}
+        cache_feriados[ano] = feriados
+        return feriados
     else:
-        messagebox.showerror("Erro", "Falha ao obter feriados da API.")
-        return []
+        messagebox.showerror("Erro", f"Falha ao obter feriados para {ano}.")
+        return {}
 
 def verificar_feriados():
     caminho_pdf = filedialog.askopenfilename(
@@ -36,14 +57,19 @@ def verificar_feriados():
         messagebox.showinfo("Resultado", "Nenhuma data encontrada no PDF.")
         return
 
-    ano = 2025
-    feriados_api = obter_feriados(ano)
-
     feriados_encontrados = []
+
     for data in datas_pdf:
-        formato_api = "-".join(data.replace("/", "-").split("-")[::-1]) 
+        formato_api = padronizar_data(data)
+        if not formato_api:
+            continue
+
+        ano = int(formato_api.split("-")[0])
+        feriados_api = obter_feriados(ano)
+
         if formato_api in feriados_api:
-            feriados_encontrados.append(data)
+            nome_feriado = feriados_api[formato_api]
+            feriados_encontrados.append(f"{data} → {nome_feriado}")
 
     if feriados_encontrados:
         messagebox.showinfo("Feriados Encontrados", "\n".join(feriados_encontrados))
