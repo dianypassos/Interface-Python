@@ -19,7 +19,6 @@ def ler_datas_pdf(caminho_pdf):
     return list(set(datas_encontradas))
 
 def padronizar_data(data_str):
-    """Converte para yyyy-mm-dd e valida se a data é real."""
     formatos_possiveis = ["%d/%m/%Y", "%d-%m-%Y", "%d.%m.%Y", "%Y/%m/%d", "%Y-%m-%d"]
     for fmt in formatos_possiveis:
         try:
@@ -91,3 +90,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
